@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.Hashtable;
 
 import javax.swing.JOptionPane;
 import javax.xml.transform.TransformerException;
@@ -117,11 +118,13 @@ public class SourceCodeGeneratorE2P
 		out.println("#ifndef _E2P_" + blockName.toUpperCase() + "_H");
 		out.println("#define _E2P_" + blockName.toUpperCase() + "_H");
 		out.println("");
+		out.println("#include \"e2p_access.h\"");
+		out.println("");
 
 		Node hwConfigBlock = XPathAPI.selectSingleNode(xmlRoot, "Block[Name='" + blockName + "']");
 		
 		StringBuilder fieldDefs = new StringBuilder();
-		int length = generateFieldDefs(hwConfigBlock, offset, "e2p_" + blockName.toLowerCase(), fieldDefs);
+		int length = generateFieldDefs(hwConfigBlock, offset, "e2p_" + blockName.toLowerCase(), fieldDefs, 0);
 
 		String h = "// E2P Block \"" + blockName + "\"";
 		out.println(h);
@@ -139,11 +142,27 @@ public class SourceCodeGeneratorE2P
 		return length;
 	}
 	
-	private int generateFieldDefs(Node blockNode, int startOffset, String functionPrefix, StringBuilder sb) throws TransformerException
+	/**
+	 * 
+	 * @param blockNode
+	 * @param startOffset
+	 * @param functionPrefix
+	 * @param sb
+	 * @param arrayCount is > 0 if an Array element is detected and this function is called recursive for the inner element type.
+	 * @return
+	 * @throws TransformerException
+	 */
+	private int generateFieldDefs(Node blockNode, int startOffset, String functionPrefix, StringBuilder sb, int arrayLength) throws TransformerException
 	{
 		int offset = startOffset;
 		
 		NodeList elements = blockNode.getChildNodes();
+		
+		boolean isArray = arrayLength > 0;
+		
+		String arrayNameSuffix = isArray ? "[" + arrayLength + "]" : "";
+		String funcParam = isArray ? "uint8_t index, " : "";	
+		String funcParam2 = isArray ? "uint8_t index" : "void";	
 
 		for (int e = 0; e < elements.getLength(); e++)
 		{
@@ -158,7 +177,7 @@ public class SourceCodeGeneratorE2P
 				String ID = ID1.toUpperCase();
 				int cTypeBits = calcCTypeBits(bits);
 
-				sb.append("// " + ID1 + " (EnumValue)" + newline);
+				sb.append("// " + ID1 + " (EnumValue" + arrayNameSuffix + ")" + newline);
 				
 				if (!description.equals(""))
 				{
@@ -169,8 +188,13 @@ public class SourceCodeGeneratorE2P
 				
 				NodeList enumElements = XPathAPI.selectNodeList(element, "Element");
 				
+				sb.append("#ifndef _ENUM_" + ID1 + newline);
+				sb.append("#define _ENUM_" + ID1 + newline);
+				
 				sb.append("typedef enum {" + newline);
 
+				Hashtable<String, String> enumDefs = new Hashtable<String, String>();
+				
 				for (int ee = 0; ee < enumElements.getLength(); ee++)
 				{
 					Node enumElement = enumElements.item(ee);
@@ -180,19 +204,25 @@ public class SourceCodeGeneratorE2P
 					String suffix = ee == enumElements.getLength() - 1 ? "" : ","; 
 					
 					sb.append("  " + name + " = " + value + suffix + newline);
+					
+					enumDefs.put(name, value);
 				}
 
 				sb.append("} " + ID1 + "Enum;" + newline);
-				sb.append(newline);
+				sb.append("#endif /* _ENUM_" + ID1 + " */" + newline + newline);
+				
+				EnumDuplicateChecker.checkEnumDefinition(ID1, enumDefs);
+				
+				String accessStr = Util.calcAccessStr("", offset, bits, isArray);
 				
 				// SET
 				
 				sb.append("// Set " + ID1 + " (EnumValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits " + bits + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + newline);
 				
-				sb.append("static inline void " + functionPrefix + "_set_" + ID1.toLowerCase() + "(" + ID1 + "Enum val)" + newline);
+				sb.append("static inline void " + functionPrefix + "_set_" + ID1.toLowerCase() + "(" + funcParam + ID1 + "Enum val)" + newline);
 				sb.append("{" + newline);
-				sb.append("  eeprom_write_UIntValue(" + (offset / 8) + ", " + (offset % 8) + ", " + bits + ", val);" + newline);
+				sb.append("  eeprom_write_UIntValue(" + accessStr + ", " + bits + ", val);" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
@@ -201,15 +231,15 @@ public class SourceCodeGeneratorE2P
 				int maxVal = (1 << cTypeBits) - 1;
 				
 				sb.append("// Get " + ID1 + " (EnumValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits " + bits + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + newline);
 				
-				sb.append("static inline " + ID1 + "Enum " + functionPrefix + "_get_" + ID1.toLowerCase() + "(void)" + newline);
+				sb.append("static inline " + ID1 + "Enum " + functionPrefix + "_get_" + ID1.toLowerCase() + "(" + funcParam2 + ")" + newline);
 				sb.append("{" + newline);
-				sb.append("  return eeprom_read_UIntValue" + cTypeBits + "(" + (offset / 8) + ", " + (offset % 8) + ", 8, 0, " + maxVal + ");" + newline);
+				sb.append("  return eeprom_read_UIntValue" + cTypeBits + "(" + accessStr + ", " + bits + ", 0, " + maxVal + ");" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
-				offset += 8;
+				offset += isArray ? bits * arrayLength : bits;
 			}
 			else if (element.getNodeName().equals("UIntValue"))
 			{
@@ -219,7 +249,7 @@ public class SourceCodeGeneratorE2P
 				String maxVal = Util.getChildNodeValue(element, "MaxVal");
 				int cTypeBits = calcCTypeBits(bits);
 				
-				sb.append("// " + ID + " (UIntValue)" + newline);
+				sb.append("// " + ID + " (UIntValue" + arrayNameSuffix + ")" + newline);
 				
 				if (!description.equals(""))
 				{
@@ -228,30 +258,32 @@ public class SourceCodeGeneratorE2P
 				
 				sb.append(newline);
 				
+				String accessStr = Util.calcAccessStr("", offset, bits, isArray);
+
 				// SET
 				
 				sb.append("// Set " + ID + " (UIntValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
 				
-				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(uint" + cTypeBits + "_t val)" + newline);
+				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(" + funcParam + "uint" + cTypeBits + "_t val)" + newline);
 				sb.append("{" + newline);
-				sb.append("  eeprom_write_UIntValue(" + (offset / 8) + ", " + (offset % 8) + ", " + bits + ", val);" + newline);
+				sb.append("  eeprom_write_UIntValue(" + accessStr + ", " + bits + ", val);" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
 				// GET
 				
 				sb.append("// Get " + ID + " (UIntValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
 				
 				// TODO: Return minimal type uint8_t, ...
-				sb.append("static inline uint" + cTypeBits + "_t " + functionPrefix + "_get_" + ID.toLowerCase() + "(void)" + newline);
+				sb.append("static inline uint" + cTypeBits + "_t " + functionPrefix + "_get_" + ID.toLowerCase() + "(" + funcParam2 + ")" + newline);
 				sb.append("{" + newline);
-				sb.append("  return eeprom_read_UIntValue" + cTypeBits + "(" + (offset / 8) + ", " + (offset % 8) + ", " + bits + ", " + minVal + ", " + maxVal + ");" + newline);
+				sb.append("  return eeprom_read_UIntValue" + cTypeBits + "(" + accessStr + ", " + bits + ", " + minVal + ", " + maxVal + ");" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
-				offset += bits;
+				offset += isArray ? bits * arrayLength : bits;
 			}
 			else if (element.getNodeName().equals("IntValue"))
 			{
@@ -261,7 +293,7 @@ public class SourceCodeGeneratorE2P
 				String maxVal = Util.getChildNodeValue(element, "MaxVal");
 				int cTypeBits = calcCTypeBits(bits);
 				
-				sb.append("// " + ID + " (IntValue)" + newline);
+				sb.append("// " + ID + " (IntValue" + arrayNameSuffix + ")" + newline);
 				
 				if (!description.equals(""))
 				{
@@ -270,36 +302,41 @@ public class SourceCodeGeneratorE2P
 				
 				sb.append(newline);
 				
+				String accessStr = Util.calcAccessStr("", offset, bits, isArray);
+
 				// SET
 				
 				sb.append("// Set " + ID + " (IntValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
 				
-				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(int" + cTypeBits + "_t val)" + newline);
+				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(" + funcParam + "int" + cTypeBits + "_t val)" + newline);
 				sb.append("{" + newline);
-				sb.append("  eeprom_write_IntValue(" + (offset / 8) + ", " + (offset % 8) + ", " + bits + ", val);" + newline);
+				sb.append("  eeprom_write_IntValue(" + accessStr + ", " + bits + ", val);" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
 				// GET
 				
 				sb.append("// Get " + ID + " (IntValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + ", min val " + minVal + ", max val " + maxVal + newline);
 				
 				// TODO: Return minimal type uint8_t, ...
-				sb.append("static inline int" + cTypeBits + "_t " + functionPrefix + "_get_" + ID.toLowerCase() + "(void)" + newline);
+				sb.append("static inline int" + cTypeBits + "_t " + functionPrefix + "_get_" + ID.toLowerCase() + "(" + funcParam2 + ")" + newline);
 				sb.append("{" + newline);
-				sb.append("  return eeprom_read_IntValue32(" + (offset / 8) + ", " + (offset % 8) + ", " + bits + ", " + minVal + ", " + maxVal + ");" + newline);
+				sb.append("  return eeprom_read_IntValue32(" + accessStr + ", " + bits + ", " + minVal + ", " + maxVal + ");" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
-				offset += bits;
+				offset += isArray ? bits * arrayLength : bits;
 			}
 			else if (element.getNodeName().equals("ByteArray"))
 			{
+				if (offset % 8 != 0)
+					throw new TransformerException("ByteArray does not start at byte border! Please fix layout.");
+				
 				String ID = Util.getChildNodeValue(element, "ID");
 				
-				sb.append("// " + ID + " (ByteArray)" + newline);
+				sb.append("// " + ID + " (ByteArray" + arrayNameSuffix + ")" + newline);
 				
 				if (!description.equals(""))
 				{
@@ -308,19 +345,41 @@ public class SourceCodeGeneratorE2P
 				
 				sb.append(newline);
 				
-				ID = ID.toUpperCase();
-				String bytes = Util.getChildNodeValue(element, "Bytes");
-				sb.append("#define EEPROM_" + ID + "_BYTE " + (offset / 8) + newline);
-				sb.append("#define EEPROM_" + ID + "_BIT " + (offset % 8) + newline);
-				sb.append("#define EEPROM_" + ID + "_LENGTH_BYTES " + bytes + newline);
+				int bytes = Integer.parseInt(Util.getChildNodeValue(element, "Bytes"));
+				int bits = bytes * 8;
+				
+				String accessStr = Util.calcAccessStr("", offset, bytes * 8, isArray);
+				
+				// SET
+				
+				sb.append("// Set " + ID + " (ByteArray)" + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + newline);
+				
+				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(" + funcParam + "void *src)" + newline);
+				sb.append("{" + newline);
+				sb.append("  eeprom_write_block(src, (uint8_t *)((" + accessStr + ") / 8), " + bytes + ");" + newline);
+				sb.append("}" + newline);
 				sb.append(newline);
-				offset += Integer.parseInt(bytes) * 8;
+				
+				// GET
+				
+				sb.append("// Get " + ID + " (ByteArray)" + newline);
+				sb.append("// Offset: " + offset + ", length bits " + bits + newline);
+				
+				// TODO: Return minimal type uint8_t, ...
+				sb.append("static inline void " + functionPrefix + "_get_" + ID.toLowerCase() + "(" + funcParam + "void *dst)" + newline);
+				sb.append("{" + newline);
+				sb.append("  eeprom_read_block(dst, (uint8_t *)((" + accessStr + ") / 8), " + bytes + ");" + newline);
+				sb.append("}" + newline);
+				sb.append(newline);
+
+				offset += isArray ? bytes * 8 * arrayLength : bytes * 8;
 			}
 			else if (element.getNodeName().equals("BoolValue"))
 			{
 				String ID = Util.getChildNodeValue(element, "ID");
 				
-				sb.append("// " + ID + " (BoolValue)" + newline);
+				sb.append("// " + ID + " (BoolValue" + arrayNameSuffix + ")" + newline);
 				
 				if (!description.equals(""))
 				{
@@ -329,37 +388,54 @@ public class SourceCodeGeneratorE2P
 				
 				sb.append(newline);
 				
+				String accessStr = Util.calcAccessStr("", offset, 8, isArray);
+				
 				// SET
 				
 				sb.append("// Set " + ID + " (BoolValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits 1" + newline);
+				sb.append("// Offset: " + offset + ", length bits 8" + newline);
 				
-				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(bool val)" + newline);
+				sb.append("static inline void " + functionPrefix + "_set_" + ID.toLowerCase() + "(" + funcParam + "bool val)" + newline);
 				sb.append("{" + newline);
-				sb.append("  eeprom_write_UIntValue(" + (offset / 8) + ", " + (offset % 8) + ", 1, val ? 1 : 0, bufx);" + newline);
+				sb.append("  eeprom_write_UIntValue(" + accessStr + ", 8, val ? 1 : 0);" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
 				// GET
 				
 				sb.append("// Get " + ID + " (BoolValue)" + newline);
-				sb.append("// Byte offset: " + (offset / 8) + ", bit offset: " + (offset % 8) + ", length bits 1" + newline);
+				sb.append("// Offset: " + offset + ", length bits 8" + newline);
 				
 				// TODO: Return minimal type uint8_t, ...
-				sb.append("static inline bool " + functionPrefix + "_get_" + ID.toLowerCase() + "(void)" + newline);
+				sb.append("static inline bool " + functionPrefix + "_get_" + ID.toLowerCase() + "(" + funcParam2 + ")" + newline);
 				sb.append("{" + newline);
-				sb.append("  return eeprom_read_UIntValue8(" + (offset / 8) + ", " + (offset % 8) + ", 1, 0, 1, bufx) == 1;" + newline);
+				sb.append("  return eeprom_read_UIntValue8(" + accessStr + ", 8, 0, 1) == 1;" + newline);
 				sb.append("}" + newline);
 				sb.append(newline);
 				
-				offset += 1;
+				if (offset % 8 != 0)
+				{
+					System.err.println("Warning: BoolValue " + ID + " not a byte boundary! e2p leayout should be corrected.");
+				}
+				
+				offset += isArray ? 8 * arrayLength : 8;
 			}
 			else if (element.getNodeName().equals("Reserved"))
 			{
+				if (isArray)
+					throw new TransformerException("Arrays are not supported for Reserved elements!");
+				
 				String bits = Util.getChildNodeValue(element, "Bits");
 				sb.append("// Reserved area with " + bits + " bits" + newline);
+				sb.append("// Offset: " + offset + newline);
 				sb.append(newline);
 				offset += Integer.parseInt(bits);
+			}
+			else if (element.getNodeName().equals("Array"))
+			{
+				int length = Integer.parseInt(Util.getChildNodeValue(element, "Length"));
+				
+				offset += generateFieldDefs(element, offset, functionPrefix, sb, length);
 			}
 		}
 		

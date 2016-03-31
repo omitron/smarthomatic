@@ -1,6 +1,6 @@
 /*
 * This file is part of smarthomatic, http://www.smarthomatic.org.
-* Copyright (c) 2013 Uwe Freese
+* Copyright (c) 2013..2014 Uwe Freese
 *
 * smarthomatic is free software: you can redistribute it and/or modify it
 * under the terms of the GNU General Public License as published by the
@@ -24,6 +24,8 @@
 #ifndef _E2P_BASESTATION_H
 #define _E2P_BASESTATION_H
 
+#include "e2p_access.h"
+
 // E2P Block "BaseStation"
 // =======================
 // Start offset (bit): 512
@@ -33,27 +35,63 @@
 // Description: This is the number of AES keys to use from the AesKeys block. Limit the number to the needed amount to avoid that the base station tries decoding with every one.
 
 // Set AesKeyCount (UIntValue)
-// Byte offset: 64, bit offset: 0, length bits 8, min val 1, max val 16
+// Offset: 512, length bits 8, min val 1, max val 16
 static inline void e2p_basestation_set_aeskeycount(uint8_t val)
 {
-  eeprom_write_UIntValue(64, 0, 8, val);
+  eeprom_write_UIntValue(512, 8, val);
 }
 
 // Get AesKeyCount (UIntValue)
-// Byte offset: 64, bit offset: 0, length bits 8, min val 1, max val 16
+// Offset: 512, length bits 8, min val 1, max val 16
 static inline uint8_t e2p_basestation_get_aeskeycount(void)
 {
-  return eeprom_read_UIntValue8(64, 0, 8, 1, 16);
+  return eeprom_read_UIntValue8(512, 8, 1, 16);
 }
 
-// AesKeys (ByteArray)
+// AesKey (ByteArray[16])
 // Description: These are all AES keys which can be used to encrypt or decrypt packages at the base station.
 
-#define EEPROM_AESKEYS_BYTE 65
-#define EEPROM_AESKEYS_BIT 0
-#define EEPROM_AESKEYS_LENGTH_BYTES 512
+// Set AesKey (ByteArray)
+// Offset: 520, length bits 256
+static inline void e2p_basestation_set_aeskey(uint8_t index, void *src)
+{
+  eeprom_write_block(src, (uint8_t *)((520 + (uint16_t)index * 256) / 8), 32);
+}
 
-// Reserved area with 3576 bits
+// Get AesKey (ByteArray)
+// Offset: 520, length bits 256
+static inline void e2p_basestation_get_aeskey(uint8_t index, void *dst)
+{
+  eeprom_read_block(dst, (uint8_t *)((520 + (uint16_t)index * 256) / 8), 32);
+}
+
+// UartBaudRate (EnumValue)
+// Description: Select which baud rate to use for communication with the base station. Use 19200 (0,2% baud rate error @20 MHz) for standard speed, which should work with any connected device. Use 115200 (1,4% baud rate error @20 MHz) to speed up communication to the base station.
+
+#ifndef _ENUM_UartBaudRate
+#define _ENUM_UartBaudRate
+typedef enum {
+  UARTBAUDRATE_19200 = 19,
+  UARTBAUDRATE_115200 = 115
+} UartBaudRateEnum;
+#endif /* _ENUM_UartBaudRate */
+
+// Set UartBaudRate (EnumValue)
+// Offset: 4616, length bits 8
+static inline void e2p_basestation_set_uartbaudrate(UartBaudRateEnum val)
+{
+  eeprom_write_UIntValue(4616, 8, val);
+}
+
+// Get UartBaudRate (EnumValue)
+// Offset: 4616, length bits 8
+static inline UartBaudRateEnum e2p_basestation_get_uartbaudrate(void)
+{
+  return eeprom_read_UIntValue8(4616, 8, 0, 255);
+}
+
+// Reserved area with 3568 bits
+// Offset: 4624
 
 
 #endif /* _E2P_BASESTATION_H */

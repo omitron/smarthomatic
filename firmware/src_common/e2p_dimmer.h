@@ -1,6 +1,6 @@
 /*
 * This file is part of smarthomatic, http://www.smarthomatic.org.
-* Copyright (c) 2013 Uwe Freese
+* Copyright (c) 2013..2014 Uwe Freese
 *
 * smarthomatic is free software: you can redistribute it and/or modify it
 * under the terms of the GNU General Public License as published by the
@@ -24,6 +24,8 @@
 #ifndef _E2P_DIMMER_H
 #define _E2P_DIMMER_H
 
+#include "e2p_access.h"
+
 // E2P Block "Dimmer"
 // ==================
 // Start offset (bit): 512
@@ -33,27 +35,55 @@
 // Description: This is the last remembered packet counter of a command from the base station. Packets with the same or lower number are ignored.
 
 // Set BaseStationPacketCounter (UIntValue)
-// Byte offset: 64, bit offset: 0, length bits 24, min val 0, max val 16777215
+// Offset: 512, length bits 24, min val 0, max val 16777215
 static inline void e2p_dimmer_set_basestationpacketcounter(uint32_t val)
 {
-  eeprom_write_UIntValue(64, 0, 24, val);
+  eeprom_write_UIntValue(512, 24, val);
 }
 
 // Get BaseStationPacketCounter (UIntValue)
-// Byte offset: 64, bit offset: 0, length bits 24, min val 0, max val 16777215
+// Offset: 512, length bits 24, min val 0, max val 16777215
 static inline uint32_t e2p_dimmer_get_basestationpacketcounter(void)
 {
-  return eeprom_read_UIntValue32(64, 0, 24, 0, 16777215);
+  return eeprom_read_UIntValue32(512, 24, 0, 16777215);
 }
 
 // BrightnessTranslationTable (ByteArray)
 // Description: These are the target values (one byte each) for the input brightness of 0, 1, ... 100% to adapt the specific brightness curve of your lamps. Set first byte to FF to not use it.
 
-#define EEPROM_BRIGHTNESSTRANSLATIONTABLE_BYTE 67
-#define EEPROM_BRIGHTNESSTRANSLATIONTABLE_BIT 0
-#define EEPROM_BRIGHTNESSTRANSLATIONTABLE_LENGTH_BYTES 101
+// Set BrightnessTranslationTable (ByteArray)
+// Offset: 536, length bits 808
+static inline void e2p_dimmer_set_brightnesstranslationtable(void *src)
+{
+  eeprom_write_block(src, (uint8_t *)((536) / 8), 101);
+}
 
-// Reserved area with 6848 bits
+// Get BrightnessTranslationTable (ByteArray)
+// Offset: 536, length bits 808
+static inline void e2p_dimmer_get_brightnesstranslationtable(void *dst)
+{
+  eeprom_read_block(dst, (uint8_t *)((536) / 8), 101);
+}
+
+// TransceiverWatchdogTimeout (UIntValue)
+// Description: Reset RFM12B module if no data is received until timeout is reached. Use this function if your specific transceiver hangs sometimes. Value is in deca seconds. Suggested setting is 48 (for 8 minutes). Set 0 to disable (default).
+
+// Set TransceiverWatchdogTimeout (UIntValue)
+// Offset: 1344, length bits 8, min val 0, max val 255
+static inline void e2p_dimmer_set_transceiverwatchdogtimeout(uint8_t val)
+{
+  eeprom_write_UIntValue(1344, 8, val);
+}
+
+// Get TransceiverWatchdogTimeout (UIntValue)
+// Offset: 1344, length bits 8, min val 0, max val 255
+static inline uint8_t e2p_dimmer_get_transceiverwatchdogtimeout(void)
+{
+  return eeprom_read_UIntValue8(1344, 8, 0, 255);
+}
+
+// Reserved area with 6840 bits
+// Offset: 1352
 
 
 #endif /* _E2P_DIMMER_H */

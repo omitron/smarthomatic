@@ -1,6 +1,6 @@
 /*
 * This file is part of smarthomatic, http://www.smarthomatic.org.
-* Copyright (c) 2013 Uwe Freese
+* Copyright (c) 2013..2014 Uwe Freese
 *
 * smarthomatic is free software: you can redistribute it and/or modify it
 * under the terms of the GNU General Public License as published by the
@@ -24,6 +24,8 @@
 #ifndef _E2P_THERMOSTAT_H
 #define _E2P_THERMOSTAT_H
 
+#include "e2p_access.h"
+
 // E2P Block "Thermostat"
 // ======================
 // Start offset (bit): 512
@@ -33,20 +35,21 @@
 // Description: This is the last remembered packet counter of a command from the base station. Packets with the same or lower number are ignored.
 
 // Set BaseStationPacketCounter (UIntValue)
-// Byte offset: 64, bit offset: 0, length bits 24, min val 0, max val 16777215
+// Offset: 512, length bits 24, min val 0, max val 16777215
 static inline void e2p_thermostat_set_basestationpacketcounter(uint32_t val)
 {
-  eeprom_write_UIntValue(64, 0, 24, val);
+  eeprom_write_UIntValue(512, 24, val);
 }
 
 // Get BaseStationPacketCounter (UIntValue)
-// Byte offset: 64, bit offset: 0, length bits 24, min val 0, max val 16777215
+// Offset: 512, length bits 24, min val 0, max val 16777215
 static inline uint32_t e2p_thermostat_get_basestationpacketcounter(void)
 {
-  return eeprom_read_UIntValue32(64, 0, 24, 0, 16777215);
+  return eeprom_read_UIntValue32(512, 24, 0, 16777215);
 }
 
 // Reserved area with 7656 bits
+// Offset: 536
 
 
 #endif /* _E2P_THERMOSTAT_H */

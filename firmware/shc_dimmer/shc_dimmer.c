@@ -20,12 +20,9 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <string.h>
-#include <avr/wdt.h>
-#include <avr/sleep.h>
-#include <avr/eeprom.h>
 
 #include "rfm12.h"
-#include "uart.h"
+#include "../src_common/uart.h"
 
 #include "../src_common/msggrp_generic.h"
 #include "../src_common/msggrp_dimmer.h"
@@ -34,9 +31,11 @@
 #include "../src_common/e2p_generic.h"
 #include "../src_common/e2p_dimmer.h"
 
-#include "aes256.h"
-#include "util.h"
+#include "../src_common/aes256.h"
+#include "../src_common/util.h"
 #include "version.h"
+
+#include "../src_common/util_watchdog_init.h"
 
 //#define UART_DEBUG_CALCULATIONS
 
@@ -56,18 +55,29 @@
 #define BUTTON_PORT PIND
 #define BUTTON_PIN 3
 
+// Power of RFM12B (since PCB rev 1.3) or RFM12 NRES (Reset) pin may be connected to PC3.
+// If not, only sw reset is used.
+#define RFM_RESET_PIN 3
+#define RFM_RESET_PORT_NR 1
+
 // These are the PWM values for 0%..100% (AKA 1V..10V output),
 // calculated by measuring the output voltage and linear interpolation
 // of the measured voltages.
-static uint16_t pwm_lookup [] = { 40, 130, 205, 270, 325, 375, 417, 455, 490, 520, 550, 575, 598, 620, 640, 658,
-	674, 690, 704, 717, 730, 743, 753, 763, 773, 783, 792, 800, 808, 816, 823, 830, 836, 843, 849, 854,
-	860, 865, 870, 875, 879, 884, 888, 892, 896, 900, 904, 907, 911, 914, 917, 920, 923, 926, 929, 932,
-	935, 937, 940, 942, 944, 947, 949, 951, 953, 955, 957, 959, 961, 963, 965, 967, 968, 970, 972, 973,
-	975, 976, 978, 979, 980, 982, 983, 984, 986, 987, 988, 989, 990, 991, 992, 994, 995, 996, 997, 998,
-	999, 1000, 1001, 1002, 1003 };
+static uint16_t pwm_lookup [] = { 119, 199, 265, 325, 376, 421, 462, 498, 528, 559, 584, 607, 629, 650,
+	668, 683, 700, 714, 727, 740, 752, 763, 773, 783, 792, 801, 809, 817, 824, 831, 837, 844, 850, 856,
+	861, 866, 871, 876, 881, 885, 890, 894, 898, 902, 905, 909, 912, 916, 919, 922, 925, 928, 931, 933,
+	936, 938, 941, 943, 946, 948, 950, 952, 954, 956, 958, 960, 962, 964, 966, 967, 969, 971, 972, 974,
+	975, 977, 978, 980, 981, 982, 984, 985, 986, 988, 989, 990, 991, 992, 993, 995, 996, 997, 998, 999,
+	1000, 1001, 1002, 1003, 1004, 1004, 1005 };
 
-#define ANIMATION_CYCLE_MS 32.768 // make one animation step every 32,768 ms, triggered by timer 0
-#define ANIMATION_UPDATE_MS 200   // update the brightness every ANIMATION_UPDATE_MS ms, done by the main loop
+static uint8_t brightness_translation[101];
+
+#define ANIMATION_CYCLE_MS 32.768   // make one animation step every 32,768 ms, triggered by timer 0
+#define ANIMATION_UPDATE_MS 200     // update the brightness every ANIMATION_UPDATE_MS ms, done by the main loop
+
+#define SWITCH_OFF_TIMEOUT_MS 3000  // If 0% brightness is reached, switch off power (relais) with a delay to
+                                    // 1) dim down before switching off and to
+                                    // 2) avoid switching power off at manual dimming.
 
 // variables used for the animation
 uint8_t animation_mode;
@@ -77,10 +87,10 @@ uint8_t start_brightness = 0;
 uint8_t end_brightness = 0;
 float current_brightness = 0;
 
-uint8_t device_id;
+uint16_t device_id;
 uint8_t use_pwm_translation = 1;
 uint32_t station_packetcounter;
-uint8_t switch_off_delay = 0; // If 0% brightness is reached, switch off power (relais) with a delay to 1) dim down before switching off and to 2) avoid switching power off at manual dimming.
+uint8_t switch_off_counter = 0;
 uint8_t version_status_cycle = SEND_VERSION_STATUS_CYCLE - 1; // send promptly after startup
 
 void switchRelais(uint8_t on)
@@ -135,9 +145,9 @@ void checkSwitchOff(void)
 {
 	if (current_brightness == 0)
 	{
-		if (switch_off_delay < 8)
+		if (switch_off_counter < (SWITCH_OFF_TIMEOUT_MS / ANIMATION_UPDATE_MS))
 		{
-			switch_off_delay++;
+			switch_off_counter++;
 		}
 		else
 		{
@@ -146,8 +156,12 @@ void checkSwitchOff(void)
 	}
 	else
 	{
-		switch_off_delay = 0;
+		switch_off_counter = 0;
 		switchRelais(1);
+		
+		// Switching on relais (and lamp) leads to interferences.
+		// Avoid sending with RFM12 directly afterwards by making a short delay.
+		_delay_ms(250);
 	}
 }
 
@@ -175,10 +189,8 @@ void setPWMDutyCyclePercent(float percent)
 		index2 = index >= 100 ? 100 : index + 1;
 		modulo = percent - index; // decimal places only, e.g. 0.12 when percent is 73.12
 		
-		uint8_t t1 = eeprom_read_UIntValue8(EEPROM_BRIGHTNESSTRANSLATIONTABLE_BYTE + index,
-			EEPROM_BRIGHTNESSTRANSLATIONTABLE_BIT, 8, 0, 0xFF);
-		uint8_t t2 = eeprom_read_UIntValue8(EEPROM_BRIGHTNESSTRANSLATIONTABLE_BYTE + index2,
-			EEPROM_BRIGHTNESSTRANSLATIONTABLE_BIT, 8, 0, 0xFF);
+		uint8_t t1 = brightness_translation[index];
+		uint8_t t2 = brightness_translation[index2];
 		
 		percent = linear_interpolate_f(modulo, 0.0, 1.0, t1, t2) * 100 / 255;
 		
@@ -233,8 +245,6 @@ void send_dimmer_status(void)
 	pkg_header_set_senderid(device_id);
 	pkg_header_set_packetcounter(packetcounter);
 	msg_dimmer_brightness_set_brightness(bri);
-
-	pkg_header_calc_crc32();
 	
 	UART_PUTF("CRC32 is %lx (added as first 4 bytes)\r\n", getBuf32(0));
 	UART_PUTF("Brightness: %u%%\r\n", bri);
@@ -242,26 +252,49 @@ void send_dimmer_status(void)
 	rfm12_send_bufx();
 }
 
-void send_version_status(void)
+void send_deviceinfo_status(void)
 {
 	inc_packetcounter();
 
-	UART_PUTF4("Sending Version: v%u.%u.%u (%08lx)\r\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_HASH);
+	UART_PUTF("Send DeviceInfo: DeviceType %u,", DEVICETYPE_DIMMER);
+	UART_PUTF4(" v%u.%u.%u (%08lx)\r\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_HASH);
 	
 	// Set packet content
-	pkg_header_init_generic_version_status();
+	pkg_header_init_generic_deviceinfo_status();
 	pkg_header_set_senderid(device_id);
 	pkg_header_set_packetcounter(packetcounter);
-	msg_generic_version_set_major(VERSION_MAJOR);
-	msg_generic_version_set_minor(VERSION_MINOR);
-	msg_generic_version_set_patch(VERSION_PATCH);
-	msg_generic_version_set_hash(VERSION_HASH);
-	pkg_header_calc_crc32();
+	msg_generic_deviceinfo_set_devicetype(DEVICETYPE_DIMMER);
+	msg_generic_deviceinfo_set_versionmajor(VERSION_MAJOR);
+	msg_generic_deviceinfo_set_versionminor(VERSION_MINOR);
+	msg_generic_deviceinfo_set_versionpatch(VERSION_PATCH);
+	msg_generic_deviceinfo_set_versionhash(VERSION_HASH);
 
 	rfm12_send_bufx();
 }
 
-// process message "brightness"
+void send_ack(uint32_t acksenderid, uint32_t ackpacketcounter, bool error)
+{
+	// any message can be used as ack, because they are the same anyway
+	if (error)
+	{
+		UART_PUTS("Send error Ack\r\n");
+		pkg_header_init_dimmer_animation_ack();
+	}
+
+	inc_packetcounter();
+	
+	// set common fields
+	pkg_header_set_senderid(device_id);
+	pkg_header_set_packetcounter(packetcounter);
+	
+	pkg_headerext_common_set_acksenderid(acksenderid);
+	pkg_headerext_common_set_ackpacketcounter(ackpacketcounter);
+	pkg_headerext_common_set_error(error);
+	
+	rfm12_send_bufx();
+}
+
+// process request "brightness"
 void process_brightness(MessageTypeEnum messagetype)
 {
 	// "Set" or "SetGet" -> modify dimmer state and abort any running animation
@@ -290,8 +323,6 @@ void process_brightness(MessageTypeEnum messagetype)
 	uint32_t acksenderid = pkg_header_get_senderid();
 	uint32_t ackpacketcounter = pkg_header_get_packetcounter();
 
-	inc_packetcounter();
-
 	// "Set" -> send "Ack"
 	if (messagetype == MESSAGETYPE_SET)
 	{
@@ -310,20 +341,10 @@ void process_brightness(MessageTypeEnum messagetype)
 		UART_PUTS("Sending AckStatus\r\n");
 	}
 
-	// set common fields
-	pkg_header_set_senderid(device_id);
-	pkg_header_set_packetcounter(packetcounter);
-	
-	pkg_headerext_common_set_acksenderid(acksenderid);
-	pkg_headerext_common_set_ackpacketcounter(ackpacketcounter);
-	pkg_headerext_common_set_error(false); // FIXME: Move code for the Ack to a function and also return an Ack when errors occur before!
-	
-	pkg_header_calc_crc32();
-	
-	rfm12_send_bufx();
+	send_ack(acksenderid, ackpacketcounter, false);
 }
 
-// process message "animation"
+// process request "animation"
 void process_animation(MessageTypeEnum messagetype)
 {
 	// "Set" or "SetGet" -> modify dimmer state and start new animation
@@ -357,8 +378,6 @@ void process_animation(MessageTypeEnum messagetype)
 	uint32_t acksenderid = pkg_header_get_senderid();
 	uint32_t ackpacketcounter = pkg_header_get_packetcounter();
 
-	inc_packetcounter();
-
 	// "Set" -> send "Ack"
 	if (messagetype == MESSAGETYPE_SET)
 	{
@@ -380,29 +399,16 @@ void process_animation(MessageTypeEnum messagetype)
 		UART_PUTS("Sending AckStatus\r\n");
 	}
 
-	// set common fields
-	pkg_header_set_senderid(device_id);
-	pkg_header_set_packetcounter(packetcounter);
-	
-	pkg_headerext_common_set_acksenderid(acksenderid);
-	pkg_headerext_common_set_ackpacketcounter(ackpacketcounter);
-	pkg_headerext_common_set_error(false); // FIXME: Move code for the Ack to a function and also return an Ack when errors occur before!
-	
-	pkg_header_calc_crc32();
-	
-	rfm12_send_bufx();
+	send_ack(acksenderid, ackpacketcounter, false);
 }
 
 void process_packet(uint8_t len)
 {
 	pkg_header_adjust_offset();
 
-	UART_PUTS("Received: ");
-	print_bytearray(bufx, len);
-	
 	// check SenderID
 	uint32_t senderID = pkg_header_get_senderid();
-	UART_PUTF("SenderID:%u;", senderID);
+	UART_PUTF("Packet Data: SenderID:%u;", senderID);
 	
 	if (senderID != 0)
 	{
@@ -437,7 +443,7 @@ void process_packet(uint8_t len)
 	}
 	
 	// check device id
-	uint8_t rcv_id = pkg_headerext_common_get_receiverid();
+	uint16_t rcv_id = pkg_headerext_common_get_receiverid();
 
 	UART_PUTF("ReceiverID:%u;", rcv_id);
 	
@@ -446,6 +452,10 @@ void process_packet(uint8_t len)
 		UART_PUTS("\r\nWRN: DeviceID does not match.\r\n");
 		return;
 	}
+	
+	// remember some values before the packet buffer is destroyed
+	uint32_t acksenderid = pkg_header_get_senderid();
+	uint32_t ackpacketcounter = pkg_header_get_packetcounter();
 	
 	// check MessageGroup + MessageID
 	uint32_t messagegroupid = pkg_headerext_common_get_messagegroupid();
@@ -456,10 +466,11 @@ void process_packet(uint8_t len)
 	if (messagegroupid != MESSAGEGROUP_DIMMER)
 	{
 		UART_PUTS("\r\nERR: Unsupported MessageGroupID.\r\n");
+		send_ack(acksenderid, ackpacketcounter, true);
 		return;
 	}
 	
-	UART_PUTF("MessageID:%u;", messageid);
+	UART_PUTF("MessageID:%u;\r\n", messageid);
 
 	switch (messageid)
 	{
@@ -470,9 +481,12 @@ void process_packet(uint8_t len)
 			process_animation(messagetype);
 			break;
 		default:
-			UART_PUTS("\r\nERR: Unsupported MessageID.\r\n");
+			UART_PUTS("ERR: Unsupported MessageID.\r\n");
+			send_ack(acksenderid, ackpacketcounter, true);
 			break;
 	}
+	
+	UART_PUTS("\r\n");
 }
 
 int main(void)
@@ -497,8 +511,8 @@ int main(void)
 	device_id = e2p_generic_get_deviceid();
 
 	// pwm translation table is not used if first byte is 0xFF
-	use_pwm_translation = (0xFF != eeprom_read_UIntValue8(EEPROM_BRIGHTNESSTRANSLATIONTABLE_BYTE,
-		EEPROM_BRIGHTNESSTRANSLATIONTABLE_BIT, 8, 0, 0xFF));
+	e2p_dimmer_get_brightnesstranslationtable(brightness_translation);
+	use_pwm_translation = (0xFF != brightness_translation[0]);
 	
 	// TODO: read (saved) dimmer state from before the eventual powerloss
 	/*for (i = 0; i < SWITCH_COUNT; i++)
@@ -518,7 +532,7 @@ int main(void)
 	uart_init();
 	UART_PUTS ("\r\n");
 	UART_PUTF4("smarthomatic Dimmer v%u.%u.%u (%08lx)\r\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_HASH);
-	UART_PUTS("(c) 2013..2014 Uwe Freese, www.smarthomatic.org\r\n");
+	UART_PUTS("(c) 2013..2015 Uwe Freese, www.smarthomatic.org\r\n");
 	osccal_info();
 	UART_PUTF ("DeviceID: %u\r\n", device_id);
 	UART_PUTF ("PacketCounter: %lu\r\n", packetcounter);
@@ -526,9 +540,11 @@ int main(void)
 	UART_PUTF ("Last received base station PacketCounter: %u\r\n\r\n", station_packetcounter);
 
 	// init AES key
-	eeprom_read_block (aes_key, (uint8_t *)EEPROM_AESKEY_BYTE, 32);
-
+	e2p_generic_get_aeskey(aes_key);
+	
+	rfm_watchdog_init(device_id, e2p_dimmer_get_transceiverwatchdogtimeout(), RFM_RESET_PORT_NR, RFM_RESET_PIN);
 	rfm12_init();
+
 	PWM_init();
 	io_init();
 	setPWMDutyCyclePercent(0);
@@ -539,7 +555,7 @@ int main(void)
 	{
 		uint16_t i;
 		
-		for (i = 0; i <= 1024; i = i + 100)
+		for (i = 800; i <= 1024; i = i + 10)
 		{
 			UART_PUTF ("PWM value OCR1A: %u\r\n", i);
 			OCR1A = i;
@@ -585,6 +601,8 @@ int main(void)
 		if (rfm12_rx_status() == STATUS_COMPLETE)
 		{
 			uint8_t len = rfm12_rx_len();
+			
+			rfm_watchdog_alive();
 			
 			if ((len == 0) || (len % 16 != 0))
 			{
@@ -690,6 +708,7 @@ int main(void)
 				manual_dim_direction = !manual_dim_direction;
 			}
 			
+			send_status_timeout = 10;
 			button_state = 0;
 		}
 				
@@ -703,6 +722,7 @@ int main(void)
 			{
 				UART_PUTF("END Brightness %u%%, ", end_brightness);
 				setPWMDutyCyclePercent((float)end_brightness);
+				send_status_timeout = 10;
 				animation_length = 0;
 				animation_position = 0;
 			}
@@ -715,22 +735,28 @@ int main(void)
 		}			
 		
 		// send status from time to time
-		if (send_status_timeout == 0)
+		if (!send_startup_reason(&mcusr_mirror))
 		{
-			send_status_timeout = SEND_STATUS_EVERY_SEC * (1000 / ANIMATION_UPDATE_MS);
-			send_dimmer_status();
-			led_blink(200, 0, 1);
+			if (send_status_timeout == 0)
+			{
+				send_status_timeout = SEND_STATUS_EVERY_SEC * (1000 / ANIMATION_UPDATE_MS);
+				send_dimmer_status();
+				led_blink(200, 0, 1);
+			}
+			else if (version_status_cycle >= SEND_VERSION_STATUS_CYCLE)
+			{
+				version_status_cycle = 0;
+				send_deviceinfo_status();
+				led_blink(200, 0, 1);
+			}
 		}
-		else if (version_status_cycle >= SEND_VERSION_STATUS_CYCLE)
-		{
-			version_status_cycle = 0;
-			send_version_status();
-			led_blink(200, 0, 1);
-		}
+
+		checkSwitchOff();
+
+		rfm_watchdog_count(ANIMATION_UPDATE_MS);
 
 		rfm12_tick();
 		send_status_timeout--;
-		checkSwitchOff();
 	}
 	
 	// never called

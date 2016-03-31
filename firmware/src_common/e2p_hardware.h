@@ -1,6 +1,6 @@
 /*
 * This file is part of smarthomatic, http://www.smarthomatic.org.
-* Copyright (c) 2013 Uwe Freese
+* Copyright (c) 2013..2014 Uwe Freese
 *
 * smarthomatic is free software: you can redistribute it and/or modify it
 * under the terms of the GNU General Public License as published by the
@@ -24,6 +24,8 @@
 #ifndef _E2P_HARDWARE_H
 #define _E2P_HARDWARE_H
 
+#include "e2p_access.h"
+
 // E2P Block "Hardware"
 // ====================
 // Start offset (bit): 0
@@ -32,46 +34,52 @@
 // DeviceType (EnumValue)
 // Description: The device can check with this value if the EEPROM data is meant for the actual type of device. If not, the device goes into an error mode.
 
+#ifndef _ENUM_DeviceType
+#define _ENUM_DeviceType
 typedef enum {
   DEVICETYPE_BASESTATION = 0,
-  DEVICETYPE_TEMPSENSOR = 20,
+  DEVICETYPE_ENVSENSOR = 20,
   DEVICETYPE_POWERSWITCH = 40,
+  DEVICETYPE_RGBDIMMER = 50,
   DEVICETYPE_DIMMER = 60,
+  DEVICETYPE_SOILMOISTUREMETER = 70,
   DEVICETYPE_THERMOSTAT = 80
 } DeviceTypeEnum;
+#endif /* _ENUM_DeviceType */
 
 // Set DeviceType (EnumValue)
-// Byte offset: 0, bit offset: 0, length bits 8
+// Offset: 0, length bits 8
 static inline void e2p_hardware_set_devicetype(DeviceTypeEnum val)
 {
-  eeprom_write_UIntValue(0, 0, 8, val);
+  eeprom_write_UIntValue(0, 8, val);
 }
 
 // Get DeviceType (EnumValue)
-// Byte offset: 0, bit offset: 0, length bits 8
+// Offset: 0, length bits 8
 static inline DeviceTypeEnum e2p_hardware_get_devicetype(void)
 {
-  return eeprom_read_UIntValue8(0, 0, 8, 0, 255);
+  return eeprom_read_UIntValue8(0, 8, 0, 255);
 }
 
 // OsccalMode (IntValue)
 // Description: This value is used to change the speed of the internal oscillator. 0 = don't use OSCCAL calibration (e.g. external crystal oszillator is used). -128 = OSCCAL measure mode: the LED blinks every 60s, so the user can measure the original speed. -127..+127 = The speed is adjusted by the given amount in per mill (e.g. 10 means to speed up the device by +1%).
 
 // Set OsccalMode (IntValue)
-// Byte offset: 1, bit offset: 0, length bits 8, min val -128, max val 127
+// Offset: 8, length bits 8, min val -128, max val 127
 static inline void e2p_hardware_set_osccalmode(int8_t val)
 {
-  eeprom_write_IntValue(1, 0, 8, val);
+  eeprom_write_IntValue(8, 8, val);
 }
 
 // Get OsccalMode (IntValue)
-// Byte offset: 1, bit offset: 0, length bits 8, min val -128, max val 127
+// Offset: 8, length bits 8, min val -128, max val 127
 static inline int8_t e2p_hardware_get_osccalmode(void)
 {
-  return eeprom_read_IntValue32(1, 0, 8, -128, 127);
+  return eeprom_read_IntValue32(8, 8, -128, 127);
 }
 
 // Reserved area with 48 bits
+// Offset: 16
 
 
 #endif /* _E2P_HARDWARE_H */

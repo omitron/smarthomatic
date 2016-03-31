@@ -13,15 +13,23 @@
 			</Element>
 			<Element>
 				<Value>20</Value>
-				<Name>TempSensor</Name>
+				<Name>EnvSensor</Name>
 			</Element>
 			<Element>
 				<Value>40</Value>
 				<Name>PowerSwitch</Name>
 			</Element>
 			<Element>
+				<Value>50</Value>
+				<Name>RGBDimmer</Name>
+			</Element>
+			<Element>
 				<Value>60</Value>
 				<Name>Dimmer</Name>
+			</Element>
+			<Element>
+				<Value>70</Value>
+				<Name>SoilMoistureMeter</Name>
 			</Element>
 			<Element>
 				<Value>80</Value>
@@ -34,6 +42,7 @@
 			<Bits>8</Bits>
 			<MinVal>-128</MinVal>
 			<MaxVal>127</MaxVal>
+			<DefaultVal>0</DefaultVal>
 		</IntValue>
 		<Reserved>
 			<Bits>48</Bits>
@@ -81,26 +90,44 @@
 			<Bits>8</Bits>
 			<MinVal>1</MinVal>
 			<MaxVal>16</MaxVal>
+			<DefaultVal>1</DefaultVal>
 		</UIntValue>
-		<ByteArray>
-			<ID>AesKeys</ID>
-			<Description>These are all AES keys which can be used to encrypt or decrypt packages at the base station.</Description>
-			<Bytes>512</Bytes>
-		</ByteArray>
+		<Array>
+			<Length>16</Length>
+			<ByteArray>
+				<ID>AesKey</ID>
+				<Description>These are all AES keys which can be used to encrypt or decrypt packages at the base station.</Description>
+				<Bytes>32</Bytes>
+			</ByteArray>
+		</Array>
+		<EnumValue>
+			<ID>UartBaudRate</ID>
+			<Description>Select which baud rate to use for communication with the base station. Use 19200 (0,2% baud rate error @20 MHz) for standard speed, which should work with any connected device. Use 115200 (1,4% baud rate error @20 MHz) to speed up communication to the base station.</Description>
+			<Bits>8</Bits>
+			<Element>
+				<Value>19</Value>
+				<Name>19200</Name>
+			</Element>
+			<Element>
+				<Value>115</Value>
+				<Name>115200</Name>
+			</Element>
+			<DefaultVal>19</DefaultVal>
+		</EnumValue>
 		<Reserved>
-			<Bits>3576</Bits>
+			<Bits>3568</Bits>
 		</Reserved>
 	</Block>
 	<Block>
-		<Name>TempSensor</Name>
-		<Description>This block contains the specific configuration data that only Temperature Sensor devices need.</Description>
+		<Name>EnvSensor</Name>
+		<Description>This block contains the specific configuration data that only Environment Sensor devices need.</Description>
 		<Restriction>
 			<RefID>DeviceType</RefID>
 			<Value>20</Value>
 		</Restriction>
 		<EnumValue>
 			<ID>TemperatureSensorType</ID>
-			<Description>You can choose one of the supported temperature / humidity sensors. If set to 0, no sensor is used, but the device sends out packets for testing purposes.</Description>
+			<Description>You can choose one of the supported temperature / humidity sensors.</Description>
 			<Bits>8</Bits>
 			<Element>
 				<Value>0</Value>
@@ -110,10 +137,56 @@
 				<Value>1</Value>
 				<Name>SHT15</Name>
 			</Element>
+			<Element>
+				<Value>2</Value>
+				<Name>DS7505</Name>
+			</Element>
+			<Element>
+				<Value>3</Value>
+				<Name>BMP085</Name>
+			</Element>
+			<Element>
+				<Value>4</Value>
+				<Name>DS18x20</Name>
+			</Element>
+			<Element>
+				<Value>5</Value>
+				<Name>SHT2x_HTU21D</Name>
+			</Element>
+		</EnumValue>
+		<EnumValue>
+			<ID>HumiditySensorType</ID>
+			<Description>You can choose one of the supported air humidity sensors.</Description>
+			<Bits>8</Bits>
+			<Element>
+				<Value>0</Value>
+				<Name>NoSensor</Name>
+			</Element>
+			<Element>
+				<Value>1</Value>
+				<Name>SHT15</Name>
+			</Element>
+			<Element>
+				<Value>2</Value>
+				<Name>SHT2x_HTU21D</Name>
+			</Element>
+		</EnumValue>
+		<EnumValue>
+			<ID>BarometricSensorType</ID>
+			<Description>You can choose one of the supported barometric pressure sensors.</Description>
+			<Bits>8</Bits>
+			<Element>
+				<Value>0</Value>
+				<Name>NoSensor</Name>
+			</Element>
+			<Element>
+				<Value>1</Value>
+				<Name>BMP085</Name>
+			</Element>
 		</EnumValue>
 		<EnumValue>
 			<ID>BrightnessSensorType</ID>
-			<Description>You can choose one of the supported light sensors. If set to 0, no sensor is used, but the device sends out packets for testing purposes.</Description>
+			<Description>You can choose one of the supported light sensors.</Description>
 			<Bits>8</Bits>
 			<Element>
 				<Value>0</Value>
@@ -124,8 +197,406 @@
 				<Name>Photocell</Name>
 			</Element>
 		</EnumValue>
+		<EnumValue>
+			<ID>DistanceSensorType</ID>
+			<Description>Choose one of the connected distance sensor types.</Description>
+			<Bits>8</Bits>
+			<Element>
+				<Value>0</Value>
+				<Name>NoSensor</Name>
+			</Element>
+			<Element>
+				<Value>1</Value>
+				<Name>SRF02</Name>
+			</Element>
+		</EnumValue>
 		<Reserved>
-			<Bits>7664</Bits>
+			<Bits>472</Bits>
+		</Reserved>
+		<EnumValue>
+			<ID>WakeupInterval</ID>
+			<Description>Decide after which time the device should be woken up by the RFM12B transceiver to measure or send values.</Description>
+			<Bits>16</Bits>
+			<Element>
+				<Value>1018</Value>
+				<Name>2s</Name>
+			</Element>
+			<Element>
+				<Value>1274</Value>
+				<Name>4s</Name>
+			</Element>
+			<Element>
+				<Value>1467</Value>
+				<Name>6s</Name>
+			</Element>
+			<Element>
+				<Value>1530</Value>
+				<Name>8s</Name>
+			</Element>
+			<Element>
+				<Value>1692</Value>
+				<Name>10s</Name>
+			</Element>
+			<Element>
+				<Value>1770</Value>
+				<Name>15s</Name>
+			</Element>
+			<Element>
+				<Value>1948</Value>
+				<Name>20s</Name>
+			</Element>
+			<Element>
+				<Value>2027</Value>
+				<Name>30s</Name>
+			</Element>
+			<Element>
+				<Value>2224</Value>
+				<Name>45s</Name>
+			</Element>
+			<Element>
+				<Value>2421</Value>
+				<Name>60s</Name>
+			</Element>
+			<Element>
+				<Value>2450</Value>
+				<Name>75s</Name>
+			</Element>
+			<Element>
+				<Value>2480</Value>
+				<Name>90s</Name>
+			</Element>
+			<Element>
+				<Value>2509</Value>
+				<Name>105s</Name>
+			</Element>
+			<Element>
+				<Value>2538</Value>
+				<Name>2m</Name>
+			</Element>
+			<Element>
+				<Value>2736</Value>
+				<Name>3m</Name>
+			</Element>
+			<Element>
+				<Value>2794</Value>
+				<Name>4m</Name>
+			</Element>
+			<Element>
+				<Value>2962</Value>
+				<Name>5m</Name>
+			</Element>
+			<Element>
+				<Value>3050</Value>
+				<Name>8m</Name>
+			</Element>
+			<Element>
+				<Value>3248</Value>
+				<Name>12m</Name>
+			</Element>
+			<Element>
+				<Value>3292</Value>
+				<Name>15m</Name>
+			</Element>
+			<Element>
+				<Value>3474</Value>
+				<Name>20m</Name>
+			</Element>
+			<DefaultVal>2509</DefaultVal>
+		</EnumValue>
+		<UIntValue>
+			<ID>TemperatureMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>TemperatureAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>4</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>HumidityMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>HumidityAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>4</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>BarometricMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>BarometricAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>4</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>BrightnessMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>BrightnessAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>4</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>DistanceMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>4</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>DistanceAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>DigitalInputMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>DigitalInputAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>6</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>AnalogInputMeasuringInterval</ID>
+			<Description>The number of times the device wakes up before this value is measured.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>1</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>AnalogInputAveragingInterval</ID>
+			<Description>The number of values whose average is calculated before sending.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>6</DefaultVal>
+		</UIntValue>
+		<Reserved>
+			<Bits>384</Bits>
+		</Reserved>
+		<Array>
+			<Length>8</Length>
+			<EnumValue>
+				<ID>DigitalInputPin</ID>
+				<Description>You can choose up to 8 GPIO pins as digital input. The enum values are counting through every pin from port B, C and D, leaving out the pins that are not accessible because otherwise used.</Description>
+				<Bits>8</Bits>
+				<Element>
+					<Value>0</Value>
+					<Name>Unused</Name>
+				</Element>
+				<Element>
+					<Value>2</Value>
+					<Name>PB1</Name>
+				</Element>
+				<Element>
+					<Value>3</Value>
+					<Name>PB2</Name>
+				</Element>
+				<Element>
+					<Value>7</Value>
+					<Name>PB6</Name>
+				</Element>
+				<Element>
+					<Value>8</Value>
+					<Name>PB7</Name>
+				</Element>
+				<Element>
+					<Value>10</Value>
+					<Name>PC1</Name>
+				</Element>
+				<Element>
+					<Value>11</Value>
+					<Name>PC2</Name>
+				</Element>
+				<Element>
+					<Value>12</Value>
+					<Name>PC3</Name>
+				</Element>
+				<Element>
+					<Value>13</Value>
+					<Name>PC4</Name>
+				</Element>
+				<Element>
+					<Value>14</Value>
+					<Name>PC5</Name>
+				</Element>
+				<Element>
+					<Value>20</Value>
+					<Name>PD3</Name>
+				</Element>
+				<Element>
+					<Value>21</Value>
+					<Name>PD4</Name>
+				</Element>
+				<Element>
+					<Value>22</Value>
+					<Name>PD5</Name>
+				</Element>
+				<Element>
+					<Value>23</Value>
+					<Name>PD6</Name>
+				</Element>
+			</EnumValue>
+		</Array>
+		<Array>
+			<Length>8</Length>
+			<BoolValue>
+				<ID>DigitalInputPullUpResistor</ID>
+				<Description>Decide if you want to switch on the pull-up resistor at each input pin you have chosen. (If you connect a simple switch connected to ground, you typically want this.)</Description>
+			</BoolValue>
+		</Array>
+		<Array>
+			<Length>8</Length>
+			<EnumValue>
+				<ID>DigitalInputTriggerMode</ID>
+				<Description>The mode decides how the device detects changes and when a new message is sent. Off means the value is sent after a full cycle time only. In any other case, the device wakes up immediately after a change. A status is then sent either when the level is going up, down or on change.</Description>
+				<Bits>8</Bits>
+				<Element>
+					<Value>0</Value>
+					<Name>Off</Name>
+				</Element>
+				<Element>
+					<Value>1</Value>
+					<Name>Up</Name>
+				</Element>
+				<Element>
+					<Value>2</Value>
+					<Name>Down</Name>
+				</Element>
+				<Element>
+					<Value>3</Value>
+					<Name>Change</Name>
+				</Element>
+			</EnumValue>
+		</Array>
+		<Reserved>
+			<Bits>320</Bits>
+		</Reserved>
+		<Array>
+			<Length>5</Length>
+			<EnumValue>
+				<ID>AnalogInputPin</ID>
+				<Description>You can choose up to 5 ADC pins as analog input. The enum values are a reduced set of the ones from the digital input.</Description>
+				<Bits>8</Bits>
+				<Element>
+					<Value>0</Value>
+					<Name>Unused</Name>
+				</Element>
+				<Element>
+					<Value>10</Value>
+					<Name>PC1</Name>
+				</Element>
+				<Element>
+					<Value>11</Value>
+					<Name>PC2</Name>
+				</Element>
+				<Element>
+					<Value>12</Value>
+					<Name>PC3</Name>
+				</Element>
+				<Element>
+					<Value>13</Value>
+					<Name>PC4</Name>
+				</Element>
+				<Element>
+					<Value>14</Value>
+					<Name>PC5</Name>
+				</Element>
+			</EnumValue>
+		</Array>
+		<Array>
+			<Length>5</Length>
+			<EnumValue>
+				<ID>AnalogInputTriggerMode</ID>
+				<Description>The mode decides how the device detects changes and when a new message is sent. The voltage level is measured in the configured interval. When the mode is set to off, the status is only sent after a full averaging cycle. In the other modes, a status is sent when the level is going up, down or changes according to the trigger level.</Description>
+				<Bits>8</Bits>
+				<Element>
+					<Value>0</Value>
+					<Name>Off</Name>
+				</Element>
+				<Element>
+					<Value>1</Value>
+					<Name>Up</Name>
+				</Element>
+				<Element>
+					<Value>2</Value>
+					<Name>Down</Name>
+				</Element>
+				<Element>
+					<Value>3</Value>
+					<Name>Change</Name>
+				</Element>
+			</EnumValue>
+		</Array>
+		<Array>
+			<Length>5</Length>
+			<UIntValue>
+				<ID>AnalogInputTriggerThreshold</ID>
+				<Description>The threshold in millivolts is used when the trigger mode is on.</Description>
+				<Bits>16</Bits>
+				<MinVal>0</MinVal>
+				<MaxVal>1100</MaxVal>
+			</UIntValue>
+		</Array>
+		<Array>
+			<Length>5</Length>
+			<UIntValue>
+				<ID>AnalogInputTriggerHysteresis</ID>
+				<Description>The hysteresis in millivolts is used when the trigger mode is on. It can avoid the trigger firing too often if you measure a slighty changing voltage. Because of noise and accuracy limits of the ADC, you should set a positive hysteresis in any case.</Description>
+				<Bits>16</Bits>
+				<MinVal>0</MinVal>
+				<MaxVal>1100</MaxVal>
+			</UIntValue>
+		</Array>
+		<Reserved>
+			<Bits>272</Bits>
+		</Reserved>
+		<Reserved>
+			<Bits>5632</Bits>
 		</Reserved>
 	</Block>
 	<Block>
@@ -137,16 +608,11 @@
 		</Restriction>
 		<UIntValue>
 			<ID>SupportedSwitches</ID>
-			<Description>This is a bit field about the connected switches. (Currently, only one switch is supported and the value has to be 0b00000001, but the value is for future usage.)</Description>
+			<Description>This is a bit field about the connected switches.</Description>
 			<Bits>8</Bits>
 			<MinVal>1</MinVal>
-			<MaxVal>1</MaxVal>
+			<MaxVal>6</MaxVal>
 		</UIntValue>
-		<ByteArray>
-			<ID>SwitchState</ID>
-			<Description>This field stores the last known switch state(s) for eight switches to allow restoring the same state after power loss. It contains also the remaining timeout value. Fill this with zeros when creating a e2p file!</Description>
-			<Bytes>16</Bytes>
-		</ByteArray>
 		<UIntValue>
 			<ID>BaseStationPacketCounter</ID>
 			<Description>This is the last remembered packet counter of a command from the base station. Packets with the same or lower number are ignored.</Description>
@@ -154,8 +620,67 @@
 			<MinVal>0</MinVal>
 			<MaxVal>16777215</MaxVal>
 		</UIntValue>
+		<Array>
+			<Length>8</Length>
+			<BoolValue>
+				<ID>SwitchState</ID>
+				<Description>This field stores the last known switch state(s) for eight switches to allow restoring the same state after power loss. It contains also the remaining timeout value. Fill this with zeros when creating a e2p file!</Description>
+			</BoolValue>
+		</Array>
+		<Array>
+			<Length>8</Length>
+			<UIntValue>
+				<ID>SwitchTimeout</ID>
+				<Description>This field stores the last known switch state(s) for eight switches to allow restoring the same state after power loss. It contains also the remaining timeout value. Fill this with zeros when creating a e2p file!</Description>
+				<Bits>16</Bits>
+				<MinVal>0</MinVal>
+				<MaxVal>65767</MaxVal>
+			</UIntValue>
+		</Array>
+		<UIntValue>
+			<ID>TransceiverWatchdogTimeout</ID>
+			<Description>Reset RFM12B module if no data is received until timeout is reached. Use this function if your specific transceiver hangs sometimes. Value is in deca seconds. Suggested setting is 48 (for 8 minutes). Set 0 to disable (default).</Description>
+			<Bits>8</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>0</DefaultVal>
+		</UIntValue>
 		<Reserved>
-			<Bits>7520</Bits>
+			<Bits>7448</Bits>
+		</Reserved>
+	</Block>
+	<Block>
+		<Name>RGBDimmer</Name>
+		<Description>This block contains the specific configuration data that only RGB Dimmer devices need.</Description>
+		<Restriction>
+			<RefID>DeviceType</RefID>
+			<Value>50</Value>
+		</Restriction>
+		<UIntValue>
+			<ID>BaseStationPacketCounter</ID>
+			<Description>This is the last remembered packet counter of a command from the base station. Packets with the same or lower number are ignored.</Description>
+			<Bits>24</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>16777215</MaxVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>BrightnessFactor</ID>
+			<Description>This value reduces the overall brightness. This is to easily adjust it to your needs without changing the LED series resistors. WARNING: It is recommended to use this only for testing, because it reduces the amount of different brightness levels. Changing the resistors is to be preferred.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>100</MaxVal>
+			<DefaultVal>100</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>TransceiverWatchdogTimeout</ID>
+			<Description>Reset RFM12B module if no data is received until timeout is reached. Use this function if your specific transceiver hangs sometimes. Value is in deca seconds. Suggested setting is 48 (for 8 minutes). Set 0 to disable (default).</Description>
+			<Bits>8</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>0</DefaultVal>
+		</UIntValue>
+		<Reserved>
+			<Bits>7640</Bits>
 		</Reserved>
 	</Block>
 	<Block>
@@ -176,9 +701,207 @@
 			<ID>BrightnessTranslationTable</ID>
 			<Description>These are the target values (one byte each) for the input brightness of 0, 1, ... 100% to adapt the specific brightness curve of your lamps. Set first byte to FF to not use it.</Description>
 			<Bytes>101</Bytes>
+			<DefaultVal>001115191A1B1C1D1E1F202122232425262728292A2B2C2D2E2E2F3031323334363738393A3B3C3D3E40414243454647494A4B4C4E505153545658595B5D5F61636567696B6D6F717375787A7D808386898B8F93969A9FA3A7ABAFB4BCC2C9CFD4DBE6F1FF</DefaultVal>
 		</ByteArray>
+		<UIntValue>
+			<ID>TransceiverWatchdogTimeout</ID>
+			<Description>Reset RFM12B module if no data is received until timeout is reached. Use this function if your specific transceiver hangs sometimes. Value is in deca seconds. Suggested setting is 48 (for 8 minutes). Set 0 to disable (default).</Description>
+			<Bits>8</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>255</MaxVal>
+			<DefaultVal>0</DefaultVal>
+		</UIntValue>
 		<Reserved>
-			<Bits>6848</Bits>
+			<Bits>6840</Bits>
+		</Reserved>
+	</Block>
+	<Block>
+		<Name>SoilMoistureMeter</Name>
+		<Description>This device can measure the humidity of soil to estimate if watering of plants is necessary.</Description>
+		<Restriction>
+			<RefID>DeviceType</RefID>
+			<Value>70</Value>
+		</Restriction>
+		<EnumValue>
+			<ID>WakeupIntervalInit</ID>
+			<Description>Decide about the interval between two measurements when the device is in initialization mode (after button press) to remember the dry threshold value.</Description>
+			<Bits>16</Bits>
+			<Element>
+				<Value>1692</Value>
+				<Name>10s</Name>
+			</Element>
+			<Element>
+				<Value>2421</Value>
+				<Name>1m</Name>
+			</Element>
+			<Element>
+				<Value>2538</Value>
+				<Name>2m</Name>
+			</Element>
+			<Element>
+				<Value>2794</Value>
+				<Name>4m</Name>
+			</Element>
+			<Element>
+				<Value>3050</Value>
+				<Name>8m</Name>
+			</Element>
+			<Element>
+				<Value>3292</Value>
+				<Name>15m</Name>
+			</Element>
+			<Element>
+				<Value>3474</Value>
+				<Name>20m</Name>
+			</Element>
+			<Element>
+				<Value>3548</Value>
+				<Name>30m</Name>
+			</Element>
+			<Element>
+				<Value>3804</Value>
+				<Name>1h</Name>
+			</Element>
+			<Element>
+				<Value>4060</Value>
+				<Name>2h</Name>
+			</Element>
+			<Element>
+				<Value>4261</Value>
+				<Name>3h</Name>
+			</Element>
+			<Element>
+				<Value>4316</Value>
+				<Name>4h</Name>
+			</Element>
+			<Element>
+				<Value>4517</Value>
+				<Name>6h</Name>
+			</Element>
+			<Element>
+				<Value>4572</Value>
+				<Name>8h</Name>
+			</Element>
+			<Element>
+				<Value>4773</Value>
+				<Name>12h</Name>
+			</Element>
+			<Element>
+				<Value>4828</Value>
+				<Name>16h</Name>
+			</Element>
+			<DefaultVal>3050</DefaultVal>
+		</EnumValue>
+		<UIntValue>
+			<ID>AveragingIntervalInit</ID>
+			<Description>The number of values whose average is calculated before the dry threshold is remembered.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>6</DefaultVal>
+		</UIntValue>
+		<EnumValue>
+			<ID>WakeupInterval</ID>
+			<Description>Decide after which time the device should be woken up by the RFM12B transceiver to measure values in normal operation.</Description>
+			<Bits>16</Bits>
+			<Element>
+				<Value>1692</Value>
+				<Name>10s</Name>
+			</Element>
+			<Element>
+				<Value>2421</Value>
+				<Name>1m</Name>
+			</Element>
+			<Element>
+				<Value>2538</Value>
+				<Name>2m</Name>
+			</Element>
+			<Element>
+				<Value>2794</Value>
+				<Name>4m</Name>
+			</Element>
+			<Element>
+				<Value>3050</Value>
+				<Name>8m</Name>
+			</Element>
+			<Element>
+				<Value>3292</Value>
+				<Name>15m</Name>
+			</Element>
+			<Element>
+				<Value>3474</Value>
+				<Name>20m</Name>
+			</Element>
+			<Element>
+				<Value>3548</Value>
+				<Name>30m</Name>
+			</Element>
+			<Element>
+				<Value>3804</Value>
+				<Name>1h</Name>
+			</Element>
+			<Element>
+				<Value>4060</Value>
+				<Name>2h</Name>
+			</Element>
+			<Element>
+				<Value>4261</Value>
+				<Name>3h</Name>
+			</Element>
+			<Element>
+				<Value>4316</Value>
+				<Name>4h</Name>
+			</Element>
+			<Element>
+				<Value>4517</Value>
+				<Name>6h</Name>
+			</Element>
+			<Element>
+				<Value>4572</Value>
+				<Name>8h</Name>
+			</Element>
+			<Element>
+				<Value>4773</Value>
+				<Name>12h</Name>
+			</Element>
+			<Element>
+				<Value>4828</Value>
+				<Name>16h</Name>
+			</Element>
+			<DefaultVal>3548</DefaultVal>
+		</EnumValue>
+		<UIntValue>
+			<ID>AveragingInterval</ID>
+			<Description>The number of values whose average is calculated before the current humidity is calculated and sent.</Description>
+			<Bits>8</Bits>
+			<MinVal>1</MinVal>
+			<MaxVal>16</MaxVal>
+			<DefaultVal>6</DefaultVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>DryThreshold</ID>
+			<Description>This is the dry threshold and maximum counter value that should happen.</Description>
+			<Bits>16</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>65535</MaxVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>MinVal</ID>
+			<Description>This is the minimum counter value measured in the current watering cycle when the soil is wet.</Description>
+			<Bits>16</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>65535</MaxVal>
+		</UIntValue>
+		<UIntValue>
+			<ID>SmoothingPercentage</ID>
+			<Description>This is the size of a moving window in which the absolute humidity (0 to 100 percent) is smoothed. This is necessary because the raw values typically show some short term variation, depending on external circumstances (plant in sunlight or above radiator). The variation also depends on the thickness of isolation above the sensor plates.</Description>
+			<Bits>8</Bits>
+			<MinVal>0</MinVal>
+			<MaxVal>30</MaxVal>
+			<DefaultVal>8</DefaultVal>
+		</UIntValue>
+		<Reserved>
+			<Bits>7576</Bits>
 		</Reserved>
 	</Block>
 	<Block>

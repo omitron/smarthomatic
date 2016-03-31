@@ -1,6 +1,6 @@
 #
 # This file is part of smarthomatic, http://www.smarthomatic.org.
-# Copyright (c) 2013 Uwe Freese
+# Copyright (c) 2013..2015 Uwe Freese
 #
 # smarthomatic is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -19,6 +19,7 @@
 # CPU config
 MCU		       = atmega328
 F_CPU	       = 20000000
+# baud rate in makefile is ignored, because it is configured by e2p
 UART_BAUD_RATE = 19200
 
 # never remove this, because the base station needs the UART
@@ -31,8 +32,8 @@ TARGET = shc_basestation
 # Source files (C dependencies are automatically generated).
 #   C			*.c
 #   Assembler	*.S
-CSRC = $(TARGET).c rfm12.c util.c uart.c aes256.c fuses.c request_buffer.c
-ASRC =
+CSRC = $(TARGET).c rfm12.c ../src_common/util.c ../src_common/uart.c ../src_common/aes256.c fuses.c request_buffer.c
+ASRC = ../src_common/aes_keyschedule-asm.S ../src_common/aes_enc-asm.S ../src_common/aes_dec-asm.S ../src_common/aes_sbox-asm.S ../src_common/aes_invsbox-asm.S
 FUSES = -U hfuse:w:hfuse.hex:i -U lfuse:w:lfuse.hex:i -U efuse:w:efuse.hex:i -u
 
 #******************************************************************************

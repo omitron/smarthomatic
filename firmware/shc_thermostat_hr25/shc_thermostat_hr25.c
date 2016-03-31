@@ -20,12 +20,9 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <string.h>
-#include <avr/wdt.h>
-#include <avr/sleep.h>
-#include <avr/eeprom.h>
 
 #include "rfm12.h"
-#include "uart.h"
+#include "../src_common/uart.h"
 
 #include "../src_common/msggrp_powerswitch.h"
 
@@ -33,13 +30,13 @@
 #include "../src_common/e2p_generic.h"
 #include "../src_common/e2p_thermostat.h"
 
-#include "aes256.h"
-#include "util.h"
+#include "../src_common/aes256.h"
+#include "../src_common/util.h"
 #include "version.h"
 
 #define SEND_STATUS_EVERY_SEC 1800 // how often should a status be sent?
 
-uint8_t device_id;
+uint16_t device_id;
 uint32_t station_packetcounter;
 
 uint16_t send_status_timeout = 5;
@@ -59,12 +56,9 @@ void process_packet(uint8_t len)
 {
 	pkg_header_adjust_offset();
 
-	UART_PUTS("Received: ");
-	print_bytearray(bufx, len);
-	
 	// check SenderID
 	uint32_t senderID = pkg_header_get_senderid();
-	UART_PUTF("SenderID:%u;", senderID);
+	UART_PUTF("Packet Data: SenderID:%u;", senderID);
 	
 	if (senderID != 0)
 	{
@@ -99,7 +93,7 @@ void process_packet(uint8_t len)
 	}
 	
 	// check device id
-	uint8_t rcv_id = pkg_headerext_common_get_receiverid();
+	uint16_t rcv_id = pkg_headerext_common_get_receiverid();
 
 	UART_PUTF("ReceiverID:%u;", rcv_id);
 	
@@ -152,7 +146,7 @@ int main(void)
 	UART_PUTF ("Last received base station PacketCounter: %u\r\n\r\n", station_packetcounter);
 	
 	// init AES key
-	eeprom_read_block(aes_key, (uint8_t *)EEPROM_AESKEY_BYTE, 32);
+	e2p_generic_get_aeskey(aes_key);
 
 	led_blink(500, 500, 3);
 
